@@ -608,7 +608,7 @@ class ReportEngine:
             bottomMargin=margins[2],
         )
 
-        on_page_callback = lambda canvas, doc: self.on_page(canvas, doc, report_date=effective_date)
+        on_page_callback = lambda canvas, doc: self.on_page(canvas, doc)
         elements = []
 
         flagged_items_summary = []
