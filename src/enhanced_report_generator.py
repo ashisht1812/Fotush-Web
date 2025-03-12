@@ -54,124 +54,111 @@ class ReportEngine:
 
     def _setup_styles(self):
         """Set up document styles with modern, professional formatting."""
-        # Title style for TOC
+        # Get the base stylesheet
+        self.styles = getSampleStyleSheet()
+        
+        # Modify existing styles instead of creating new ones where possible
+        self.styles['Title'].textColor = colors.HexColor("#2C3E50")  # Modern dark blue
+        self.styles['Title'].fontSize = 20
+        self.styles['Title'].leading = 24
+        self.styles['Title'].spaceBefore = 30
+        self.styles['Title'].spaceAfter = 20
+        self.styles['Title'].alignment = TA_LEFT
+
+        self.styles['Heading1'].textColor = colors.HexColor("#2C3E50")
+        self.styles['Heading1'].fontSize = 16
+        self.styles['Heading1'].leading = 20
+        self.styles['Heading1'].spaceBefore = 15
+        self.styles['Heading1'].spaceAfter = 10
+
+        self.styles['Heading2'].textColor = colors.HexColor("#34495E")
+        self.styles['Heading2'].fontSize = 14
+        self.styles['Heading2'].leading = 18
+        self.styles['Heading2'].spaceBefore = 12
+        self.styles['Heading2'].spaceAfter = 8
+
+        self.styles['BodyText'].textColor = colors.HexColor("#2C3E50")
+        self.styles['BodyText'].fontSize = 10
+        self.styles['BodyText'].leading = 14
+        self.styles['BodyText'].spaceBefore = 6
+        self.styles['BodyText'].spaceAfter = 6
+
+        # Add custom styles that don't exist in the base stylesheet
         self.styles.add(ParagraphStyle(
             name="TOCTitle",
-            fontName="Helvetica-Bold",
+            parent=self.styles['Title'],
             fontSize=20,
             leading=24,
             spaceBefore=30,
             spaceAfter=20,
             alignment=TA_LEFT,
-            textColor=colors.HexColor("#2C3E50")  # Modern dark blue
+            textColor=colors.HexColor("#2C3E50")
         ))
 
-        # Main section style for TOC
         self.styles.add(ParagraphStyle(
             name="TOCHeading1",
-            fontName="Helvetica-Bold",
+            parent=self.styles['Heading1'],
             fontSize=12,
             leading=16,
             spaceBefore=8,
             spaceAfter=4,
             leftIndent=0,
-            textColor=colors.HexColor("#34495E")  # Slightly lighter blue
+            textColor=colors.HexColor("#34495E")
         ))
 
-        # Subsection style for TOC
         self.styles.add(ParagraphStyle(
             name="TOCHeading2",
-            fontName="Helvetica",
+            parent=self.styles['Heading2'],
             fontSize=11,
             leading=14,
             spaceBefore=4,
             spaceAfter=4,
             leftIndent=20,
-            textColor=colors.HexColor("#7F8C8D")  # Modern gray
+            textColor=colors.HexColor("#7F8C8D")
         ))
 
-        # Main heading style
-        self.styles.add(ParagraphStyle(
-            name="Heading1",
-            fontName="Helvetica-Bold",
-            fontSize=16,
-            leading=20,
-            spaceBefore=15,
-            spaceAfter=10,
-            alignment=TA_LEFT,
-            textColor=colors.HexColor("#2C3E50"),  # Modern dark blue
-            borderWidth=0,
-            borderColor=colors.HexColor("#E0E0E0"),  # Light gray
-            borderPadding=(0, 0, 8, 0)  # Bottom padding only
-        ))
-
-        # Subheading style
-        self.styles.add(ParagraphStyle(
-            name="Heading2",
-            fontName="Helvetica-Bold",
-            fontSize=14,
-            leading=18,
-            spaceBefore=12,
-            spaceAfter=8,
-            alignment=TA_LEFT,
-            textColor=colors.HexColor("#34495E"),  # Slightly lighter blue
-            borderWidth=0
-        ))
-
-        # Body text style
-        self.styles.add(ParagraphStyle(
-            name="BodyText",
-            fontName="Helvetica",
-            fontSize=10,
-            leading=14,
-            spaceBefore=6,
-            spaceAfter=6,
-            alignment=TA_LEFT,
-            textColor=colors.HexColor("#2C3E50")  # Modern dark blue
-        ))
-
-        # Footnote styles
         self.styles.add(ParagraphStyle(
             name="FootnoteHeading",
-            fontName="Helvetica-Bold",
+            parent=self.styles['BodyText'],
             fontSize=9,
             leading=12,
             spaceBefore=8,
             spaceAfter=4,
-            textColor=colors.HexColor("#34495E")  # Slightly lighter blue
+            textColor=colors.HexColor("#34495E")
         ))
 
         self.styles.add(ParagraphStyle(
             name="FootnoteText",
-            fontName="Helvetica",
+            parent=self.styles['BodyText'],
             fontSize=8,
             leading=10,
             spaceBefore=2,
             spaceAfter=2,
             leftIndent=20,
-            textColor=colors.HexColor("#7F8C8D")  # Modern gray
+            textColor=colors.HexColor("#7F8C8D")
         ))
 
-        # New styles
         self.styles.add(ParagraphStyle(
             name="Highlighted",
+            parent=self.styles['BodyText'],
             fontSize=10,
-            textColor=colors.HexColor("#E74C3C")  # Modern red for highlighting
+            textColor=colors.HexColor("#E74C3C")
         ))
-        
+
         self.styles.add(ParagraphStyle(
             name="HighlightedBackground",
+            parent=self.styles['BodyText'],
             fontSize=12,
-            backColor=colors.HexColor("#FFF9C4"),  # Soft yellow background
-            textColor=colors.HexColor("#2C3E50")  # Modern dark blue text
+            backColor=colors.HexColor("#FFF9C4"),
+            textColor=colors.HexColor("#2C3E50")
         ))
-        
+
         self.styles.add(ParagraphStyle(
             name="NormalStyle",
-            fontName="Helvetica",
+            parent=self.styles['Normal'],
             fontSize=10,
             leading=14,
-            textColor=colors.HexColor("#2C3E50")  # Modern dark blue
+            textColor=colors.HexColor("#2C3E50")
         ))
 
     def build_table_of_contents(self):
@@ -496,6 +483,202 @@ class ReportEngine:
         pdf_front = self.render_front_page(effective_date)
         pdf_report = self.generate_report_pages()
         self.combine_pdfs(pdf_front, pdf_report)
+
+    def generate_pdf_report(self, df, effective_date):
+        """ Generate a PDF report based on the report configurations. """
+
+        filename = self.reports['filename']
+
+        # Convert effective_date to datetime if it's a string
+        if isinstance(effective_date, str):
+            effective_date = datetime.strptime(effective_date, "%m/%d/%Y")
+
+        formatted_effective_date = effective_date.strftime("%Y-%m-%d")
+        file_name_with_date = f"{filename}_{formatted_effective_date}.pdf"
+
+        if self.env == 'qa':
+            report_location = self.reports['report_location_qa']
+        elif self.env == 'prod':
+            report_location = self.reports['report_location_prod']
+        else:
+            report_location = '.'
+
+        file_name_with_date = report_location + file_name_with_date
+
+        buffer = io.BytesIO()
+        pagesize = landscape(A2)
+        margins = [5, 5, 5, 5]
+
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=pagesize,
+            rightMargin=margins[1],
+            leftMargin=margins[3],
+            topMargin=margins[0],
+            bottomMargin=margins[2],
+        )
+
+        on_page_callback = lambda canvas, doc: self.on_page(canvas, doc, report_date=effective_date)
+        elements = []
+
+        flagged_items_summary = []
+
+        group_colors = {
+            'Group1': '#DCDCDC',
+            'Group2': '#C8E6C9',
+            'Group3': '#BBDEFB',
+            'Group4': '#A9A9A9',
+            'Group5': '#9E9E9E'
+        }
+
+        for section in self.reports['topics']:
+            title = section['title']
+            content = section['content']
+            self.register_bookmark(title)
+            elements.append(Paragraph(title, self.styles['Heading1']))
+            elements.append(Paragraph(f"{content}", self.styles['TOCHeading2']))
+            elements.append(PageBreak())
+
+            for section in self.reports['topics']:
+                elements.append(Paragraph(section['title'], self.styles['Heading1']))
+                elements.append(Paragraph(section['content'], self.styles['Heading2']))
+                elements.append(Spacer(1, 12))
+
+                for table_config in section['sections']:
+                    db_filter_criteria = None
+                    filtered_df = {}
+
+                    if db_filter_criteria:
+                        filter_criteria = db_filter_criteria
+                    else:
+                        section = table_config.get('section')
+                        filter_criteria = section.get('filter_criteria', {}) if section else {}
+
+                    if not filter_criteria:
+                        print("No filter criteria available. Skipping filtering step.")
+                        filtered_df = df.copy()
+                    else:
+                        filtered_df = df.copy()
+                        for column, condition in filter_criteria.items():
+                            filtered_df = self.apply_filter(filtered_df, column, condition)
+
+                    report_columns_info = table_config['report_columns_info']
+                    multi_level_headers = table_config.get('multi_level_headers', [])
+                    table_data, header_styles = self.prepare_table_data(
+                        report_columns_info, filtered_df, multi_level_headers)
+
+                    flagged_data = []
+                    for rule_key, rule in self.config['flag_rules'].items():
+                        conditions = rule['conditions']
+                        severity = rule['severity']
+                        color = rule['color']
+                        text_color = rule['text_color']
+                        column = rule['field']
+
+                        if filtered_df is not None:
+                            for index, row in filtered_df.iterrows():
+                                if self.flag_manager.evaluate_conditions(row, conditions):
+                                    flagged_data.append({
+                                        'index': index,
+                                        'column': column,
+                                        'color': color,
+                                        'severity': severity,
+                                        'text_color': text_color
+                                    })
+
+                    self.flag_manager.save_flagged_data(flagged_data, 'flag_records')
+
+                    headers = [[item['header'] for item in table_config['report_columns_info']]]
+                    table_data = [headers[0]] + table_data
+
+                    custom_style = self.get_custom_style()
+                    row_index = 0
+
+                    grand_total = filtered_df['MARKET_VALUE'].sum() if filtered_df is not None else 0
+
+                    aggregated_values_team = filtered_df.groupby(['INVESTMENT_TEAM_NAME', 'INVESTMENT_SUB_TEAM_NAME'])["MARKET_VALUE"].sum().reset_index()
+
+                    grand_total_row = [Paragraph('<b>Grand Total</b>', custom_style), Paragraph('', custom_style), Paragraph(f"{round(grand_total, 2)}", custom_style)]
+                    table_data.append(grand_total_row)
+                    row_index = len(table_data)
+
+                    if aggregated_values_team is not None:
+                        for index, row in aggregated_values_team.iterrows():
+                            investment_team_name = row['INVESTMENT_TEAM_NAME']
+                            investment_sub_team_name = row['INVESTMENT_SUB_TEAM_NAME']
+                            aggregated_value = row['MARKET_VALUE']
+
+                            formatted_row = [Paragraph(f"<b>{investment_team_name}</b>", custom_style), Paragraph(f"{investment_sub_team_name}", custom_style), Paragraph(f"{aggregated_value:.2f}", custom_style)]
+
+                            table_data.append(formatted_row)
+                            row_index += 1
+
+                    table_style = TableStyle(header_styles)
+                    table = Table(table_data)
+                    table.setStyle(table_style)
+                    elements.append(table)
+                    elements.append(PageBreak())
+
+        toc_elements = self.build_table_of_contents()
+        elements.extend(toc_elements)
+
+        init_doc = SimpleDocTemplate(
+            filename,
+            pagesize=pagesize,
+            rightMargin=margins[1],
+            leftMargin=margins[3],
+            topMargin=margins[0],
+            bottomMargin=margins[2],
+        )
+
+        init_doc.build(toc_elements + elements, onFirstPage=on_page_callback, onLaterPages=on_page_callback)
+
+        pdf_front_page = self.render_front_page(formatted_effective_date)
+
+        final_pdf = PdfWriter()
+
+        front_pdf_reader = PdfReader(io.BytesIO(pdf_front_page))
+        report_pdf_reader = PdfReader(buffer)
+
+        final_pdf.add_page(front_pdf_reader.pages[0])
+
+        for page in report_pdf_reader.pages:
+            final_pdf.add_page(page)
+
+        with open(file_name_with_date, 'wb') as outfile:
+            final_pdf.write(outfile)
+
+        return file_name_with_date, flagged_items_summary
+
+    def register_bookmark(self, title):
+        """Register a bookmark for the TOC."""
+        self.bookmarks[title] = len(self.bookmarks) + 1
+
+    def apply_filter(self, df, column, condition):
+        """ Apply filters based on the condition. """
+        if isinstance(condition, list):
+            # Handle list of values for inclusion
+            return df[df[column].isin(condition)]
+        elif isinstance(condition, str):
+            # Check for numeric comparison
+            match = re.match(r'([<>]=?)\s*(\d+(\.\d+)?)', condition)
+            if match:
+                operator, value = match.groups()[0:2]
+                value = float(value)  # Convert value to float for comparison
+                if operator == '>':
+                    return df[df[column] > value]
+                elif operator == '<':
+                    return df[df[column] < value]
+                elif operator == '>=':
+                    return df[df[column] >= value]
+                elif operator == '<=':
+                    return df[df[column] <= value]
+                elif operator == '==':
+                    return df[df[column] == value]
+            else:
+                # Direct equality for string and non-list values
+                return df[df[column] == condition]
+        return df
 
 # ... [Keep your FlagManager class and other classes unchanged] ...
 
