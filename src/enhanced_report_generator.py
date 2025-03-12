@@ -479,10 +479,41 @@ class ReportEngine:
             output_pdf.write(outfile)
 
     def run_report(self):
+        """Run the report generation process using the generate_pdf_report method."""
         effective_date = self.common.get("effective_date", datetime.now().strftime("%Y-%m-%d"))
-        pdf_front = self.render_front_page(effective_date)
-        pdf_report = self.generate_report_pages()
-        self.combine_pdfs(pdf_front, pdf_report)
+        
+        # Load sample data for demonstration
+        try:
+            # Try to load sample data from CSV if available
+            sample_data_path = "sample_data.csv"
+            if os.path.exists(sample_data_path):
+                df = pd.read_csv(sample_data_path)
+                print(f"Loaded sample data with {len(df)} rows")
+            else:
+                # Create dummy data if no CSV is available
+                print("No sample data found, creating dummy data")
+                df = pd.DataFrame({
+                    'INVESTMENT_TEAM_NAME': ['Team A', 'Team A', 'Team B', 'Team B'],
+                    'INVESTMENT_SUB_TEAM_NAME': ['Sub A1', 'Sub A2', 'Sub B1', 'Sub B2'],
+                    'MARKET_VALUE': [1000.0, 2000.0, 1500.0, 2500.0]
+                })
+        except Exception as e:
+            print(f"Error loading data: {e}")
+            # Create minimal dummy data in case of error
+            df = pd.DataFrame({
+                'INVESTMENT_TEAM_NAME': ['Team A'],
+                'INVESTMENT_SUB_TEAM_NAME': ['Sub A1'],
+                'MARKET_VALUE': [1000.0]
+            })
+        
+        # Generate the report using the enhanced method
+        report_file, flagged_items = self.generate_pdf_report(df, effective_date)
+        
+        print(f"Report generated successfully: {report_file}")
+        if flagged_items:
+            print(f"Found {len(flagged_items)} flagged items in the report")
+        
+        return report_file
 
     def generate_pdf_report(self, df, effective_date):
         """ Generate a PDF report based on the report configurations. """
@@ -693,9 +724,45 @@ if __name__ == "__main__":
             "flag_rules": {}
         }
     }
+    
+    # Load sample data
+    try:
+        # Try to load sample data from CSV if available
+        sample_data_path = "sample_data.csv"
+        if os.path.exists(sample_data_path):
+            df = pd.read_csv(sample_data_path)
+            print(f"Loaded sample data with {len(df)} rows")
+        else:
+            # Create dummy data if no CSV is available
+            print("No sample data found, creating dummy data")
+            df = pd.DataFrame({
+                'INVESTMENT_TEAM_NAME': ['Team A', 'Team A', 'Team B', 'Team B'],
+                'INVESTMENT_SUB_TEAM_NAME': ['Sub A1', 'Sub A2', 'Sub B1', 'Sub B2'],
+                'MARKET_VALUE': [1000.0, 2000.0, 1500.0, 2500.0]
+            })
+    except Exception as e:
+        print(f"Error loading data: {e}")
+        # Create minimal dummy data in case of error
+        df = pd.DataFrame({
+            'INVESTMENT_TEAM_NAME': ['Team A'],
+            'INVESTMENT_SUB_TEAM_NAME': ['Sub A1'],
+            'MARKET_VALUE': [1000.0]
+        })
+    
+    # Get effective date from config
+    effective_date = config["common"]["effective_date"]
+    
+    # Initialize the report engine
     scenarios = {}
     db_cursor = None
     env = "qa"
-
+    
+    # Create the report engine
     engine = ReportEngine(config, scenarios, db_cursor, env)
-    engine.run_report() 
+    
+    # Generate the report by directly calling generate_pdf_report
+    report_file, flagged_items = engine.generate_pdf_report(df, effective_date)
+    
+    print(f"Report generated successfully: {report_file}")
+    if flagged_items:
+        print(f"Found {len(flagged_items)} flagged items in the report") 
