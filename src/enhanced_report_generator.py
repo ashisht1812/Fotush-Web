@@ -162,61 +162,71 @@ class ReportEngine:
         ))
 
     def build_table_of_contents(self):
-        """Build a modern, professional table of contents with enhanced styling."""
+        """Build a modern, professional table of contents with hierarchical numbering."""
         elements = []
         
         # Add TOC title with modern styling
-        toc_title = Paragraph("Table of Contents", self.styles["TOCTitle"])
+        toc_title = Paragraph("Table of Contents", self.styles['TOCTitle'])
         elements.append(toc_title)
         
-        # Add horizontal line with modern styling
+        # Add horizontal line
         elements.append(HRFlowable(
             width="100%",
-            thickness=0.5,
-            color=colors.HexColor("#E0E0E0"),  # Light gray
+            thickness=1,
+            color=colors.HexColor("#E0E0E0"),
             spaceBefore=5,
-            spaceAfter=25,
+            spaceAfter=15,
             lineCap=1
         ))
         
-        # Get sections from configuration
-        sections = self.reports.get("sections", [])
-        section_counter = 1
+        # Create a custom style for main entries
+        main_entry_style = ParagraphStyle(
+            'MainTOCEntry',
+            parent=self.styles['BodyText'],
+            fontSize=11,
+            leading=16,
+            spaceBefore=10,
+            spaceAfter=4,
+            textColor=colors.HexColor("#2C3E50")
+        )
         
-        for section in sections:
-            title = section.get("title", section.get("section_name", ""))
-            subsections = section.get("subsections", [])
-            page_num = self.bookmarks.get(title, 1)
-            
-            # Create bookmark key
-            bookmark_key = f"section_{section_counter}"
-            
-            # Format main section with modern styling
-            dots = "." * (60 - len(f"{section_counter}. {title}") - len(str(page_num)))
-            toc_text = f'<link href="#{bookmark_key}"><b>{section_counter}. {title}</b>{dots}{page_num}</link>'
-            elements.append(Paragraph(toc_text, self.styles["TOCHeading1"]))
-            
-            # Store bookmark for this section
-            self.bookmarks[bookmark_key] = page_num
-            
-            # Format subsections with modern styling
-            if subsections:
-                for sub_idx, subsection in enumerate(subsections, 1):
-                    sub_title = subsection.get("title", "")
-                    sub_page = self.bookmarks.get(f"{title}:{sub_title}", page_num)
-                    
-                    # Create bookmark key for subsection
-                    sub_bookmark_key = f"section_{section_counter}_{sub_idx}"
-                    
-                    sub_dots = "." * (55 - len(f"{section_counter}.{sub_idx} {sub_title}") - len(str(sub_page)))
-                    sub_text = f'<link href="#{sub_bookmark_key}">{section_counter}.{sub_idx} {sub_title}{sub_dots}{sub_page}</link>'
-                    elements.append(Paragraph(sub_text, self.styles["TOCHeading2"]))
-                    
-                    # Store bookmark for this subsection
-                    self.bookmarks[sub_bookmark_key] = sub_page
-            
-            section_counter += 1
+        # Create a custom style for sub entries
+        sub_entry_style = ParagraphStyle(
+            'SubTOCEntry',
+            parent=self.styles['BodyText'],
+            fontSize=10,
+            leading=14,
+            spaceBefore=4,
+            spaceAfter=4,
+            leftIndent=20,
+            textColor=colors.HexColor("#34495E")
+        )
         
+        # Track section numbers
+        section_num = 1
+        
+        # Process bookmarks and create TOC entries
+        sorted_bookmarks = sorted(self.bookmarks.items(), key=lambda x: x[1])  # Sort by page number
+        current_main_section = None
+        
+        for title, page_num in sorted_bookmarks:
+            # Check if this is a main section or subsection
+            if '.' not in title:
+                # Main section
+                dots = "." * (50 - len(f"{section_num}. {title}") - len(str(page_num)))
+                toc_text = f"{section_num}. {title}{dots}{page_num}"
+                elements.append(Paragraph(toc_text, main_entry_style))
+                current_main_section = section_num
+                section_num += 1
+            else:
+                # Subsection
+                # Extract subsection number
+                sub_num = title.split('.')[-1]
+                dots = "." * (45 - len(f"{current_main_section}.{sub_num} {title}") - len(str(page_num)))
+                toc_text = f"{current_main_section}.{sub_num} {title}{dots}{page_num}"
+                elements.append(Paragraph(toc_text, sub_entry_style))
+        
+        elements.append(Spacer(1, 20))
         elements.append(PageBreak())
         return elements
 
@@ -772,18 +782,9 @@ class ReportEngine:
                     elements.append(PageBreak())
 
         toc_elements = self.build_table_of_contents()
-        elements.extend(toc_elements)
+        elements = toc_elements + elements
 
-        init_doc = SimpleDocTemplate(
-            filename,
-            pagesize=pagesize,
-            rightMargin=margins[1],
-            leftMargin=margins[3],
-            topMargin=margins[0],
-            bottomMargin=margins[2],
-        )
-
-        init_doc.build(toc_elements + elements, onFirstPage=on_page_callback, onLaterPages=on_page_callback)
+        doc.build(elements, onFirstPage=on_page_callback, onLaterPages=on_page_callback)
 
         pdf_front_page = self.render_front_page(formatted_effective_date)
 
