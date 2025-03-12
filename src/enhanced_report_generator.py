@@ -270,11 +270,15 @@ class ReportEngine:
         
         canvas.restoreState()
 
-    def prepare_table_data(self, report_column_info, dataframe):
+    def prepare_table_data(self, report_column_info, dataframe, multi_level_headers=None):
         """Prepare table data with support for multi-level headers and group colors."""
         custom_style = self.get_custom_style()
         table_data = []
         header_rows = {}
+        
+        # If multi_level_headers is None, initialize it as an empty list
+        if multi_level_headers is None:
+            multi_level_headers = []
         
         # First, organize columns by groups
         groups = {}
@@ -311,13 +315,14 @@ class ReportEngine:
                 group_spans.append((len(group_row)-1, group_span))
             
             # Add the group row to table data
-            table_data.append(group_row)
-            header_rows[0] = {"row_type": "group", "spans": group_spans}
+            if group_row:  # Only add if there are actual groups
+                table_data.append(group_row)
+                header_rows[0] = {"row_type": "group", "spans": group_spans}
         
         # Create column header row
         header_row = []
         for col_info in report_column_info:
-            header_text = col_info.get("display_name", col_info.get("name", ""))
+            header_text = col_info.get("display_name", col_info.get("name", col_info.get("header", "")))
             header_cell = Paragraph(f"<b>{header_text}</b>", custom_style)
             header_row.append(header_cell)
         
@@ -329,20 +334,68 @@ class ReportEngine:
         }
         
         # Add data rows
-        for _, row in dataframe.iterrows():
-            data_row = []
-            for col_info in report_column_info:
-                column_name = col_info.get("name")
-                cell_value = row.get(column_name, "")
-                if pd.isna(cell_value):
-                    cell_value = ""
-                elif isinstance(cell_value, (float, np.floating)):
-                    cell_value = f"{cell_value:.2f}"
-                cell = Paragraph(str(cell_value), custom_style)
-                data_row.append(cell)
-            table_data.append(data_row)
+        data_rows = []
+        if dataframe is not None and not dataframe.empty:
+            for _, row in dataframe.iterrows():
+                data_row = []
+                for col_info in report_column_info:
+                    column_name = col_info.get("name", col_info.get("column", ""))
+                    if column_name in row:
+                        cell_value = row[column_name]
+                        if pd.isna(cell_value):
+                            cell_value = ""
+                        elif isinstance(cell_value, (float, np.floating)):
+                            cell_value = f"{cell_value:.2f}"
+                        cell = Paragraph(str(cell_value), custom_style)
+                        data_row.append(cell)
+                    else:
+                        # Handle missing columns gracefully
+                        data_row.append(Paragraph("", custom_style))
+                data_rows.append(data_row)
         
-        return table_data, header_rows
+        # Create table style commands
+        style_commands = []
+        
+        # Basic styling
+        style_commands.extend([
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('TOPPADDING', (0, 0), (-1, -1), 8),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+            ('LEFTPADDING', (0, 0), (-1, -1), 10),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 10),
+            ('GRID', (0, 0), (-1, -1), 0.25, colors.HexColor("#E0E0E0")),
+        ])
+        
+        # Header styling
+        header_offset = 0
+        if groups and 0 in header_rows:
+            header_offset = 1
+            group_spans = header_rows[0]["spans"]
+            for group_idx, span in group_spans:
+                style_commands.extend([
+                    ('BACKGROUND', (group_idx, 0), (group_idx + span - 1, 0), colors.HexColor("#2C3E50")),
+                    ('TEXTCOLOR', (group_idx, 0), (group_idx + span - 1, 0), colors.white),
+                    ('SPAN', (group_idx, 0), (group_idx + span - 1, 0)),
+                    ('ALIGN', (group_idx, 0), (group_idx + span - 1, 0), 'CENTER'),
+                    ('FONTNAME', (group_idx, 0), (group_idx + span - 1, 0), 'Helvetica-Bold'),
+                ])
+        
+        # Column header styling
+        for col_idx in range(len(header_row)):
+            style_commands.extend([
+                ('BACKGROUND', (col_idx, header_offset), (col_idx, header_offset), colors.HexColor("#34495E")),
+                ('TEXTCOLOR', (col_idx, header_offset), (col_idx, header_offset), colors.white),
+                ('ALIGN', (col_idx, header_offset), (col_idx, header_offset), 'CENTER'),
+                ('FONTNAME', (col_idx, header_offset), (col_idx, header_offset), 'Helvetica-Bold'),
+            ])
+        
+        # Alternating row colors
+        for row_idx in range(header_offset + 1, header_offset + 1 + len(data_rows), 2):
+            style_commands.append(('BACKGROUND', (0, row_idx), (-1, row_idx), colors.HexColor("#F8F9FA")))
+        
+        return data_rows, style_commands
 
     def create_table_style(self, style_config, data=None):
         """Create a TableStyle with modern, professional formatting."""
@@ -406,10 +459,16 @@ class ReportEngine:
 
     def get_custom_style(self):
         """Get a custom style from the stylesheet."""
-        for style in self.styles:
-            if style.name == "NormalStyle":
-                return style
-        return self.styles["NormalStyle"]
+        # Return the NormalStyle directly if it exists
+        if "NormalStyle" in self.styles:
+            return self.styles["NormalStyle"]
+        
+        # If NormalStyle doesn't exist, return BodyText as a fallback
+        if "BodyText" in self.styles:
+            return self.styles["BodyText"]
+            
+        # Last resort, return Normal style
+        return self.styles["Normal"]
 
     def render_front_page(self, effective_date):
         """ Render the first page using Jinja2 and convert it to PDF. """
@@ -593,11 +652,45 @@ class ReportEngine:
                         for column, condition in filter_criteria.items():
                             filtered_df = self.apply_filter(filtered_df, column, condition)
 
+                    # Get column information
                     report_columns_info = table_config['report_columns_info']
-                    multi_level_headers = table_config.get('multi_level_headers', [])
-                    table_data, header_styles = self.prepare_table_data(
-                        report_columns_info, filtered_df, multi_level_headers)
-
+                    
+                    # Create custom style for text
+                    custom_style = self.get_custom_style()
+                    
+                    # Create table data structure
+                    table_data = []
+                    
+                    # Create header row
+                    header_row = []
+                    for col_info in report_columns_info:
+                        header_text = col_info.get('header', col_info.get('display_name', col_info.get('name', '')))
+                        header_cell = Paragraph(f"<b>{header_text}</b>", custom_style)
+                        header_row.append(header_cell)
+                    
+                    # Add header row to table data
+                    table_data.append(header_row)
+                    
+                    # Add data rows
+                    if filtered_df is not None and not filtered_df.empty:
+                        for _, row in filtered_df.iterrows():
+                            data_row = []
+                            for col_info in report_columns_info:
+                                column_name = col_info.get('name', col_info.get('column', ''))
+                                if column_name in row:
+                                    cell_value = row[column_name]
+                                    if pd.isna(cell_value):
+                                        cell_value = ""
+                                    elif isinstance(cell_value, (float, np.floating)):
+                                        cell_value = f"{cell_value:.2f}"
+                                    cell = Paragraph(str(cell_value), custom_style)
+                                    data_row.append(cell)
+                                else:
+                                    # Handle missing columns gracefully
+                                    data_row.append(Paragraph("", custom_style))
+                            table_data.append(data_row)
+                    
+                    # Process flag data
                     flagged_data = []
                     for rule_key, rule in self.config['flag_rules'].items():
                         conditions = rule['conditions']
@@ -618,35 +711,63 @@ class ReportEngine:
                                     })
 
                     self.flag_manager.save_flagged_data(flagged_data, 'flag_records')
-
-                    headers = [[item['header'] for item in table_config['report_columns_info']]]
-                    table_data = [headers[0]] + table_data
-
-                    custom_style = self.get_custom_style()
-                    row_index = 0
-
-                    grand_total = filtered_df['MARKET_VALUE'].sum() if filtered_df is not None else 0
-
-                    aggregated_values_team = filtered_df.groupby(['INVESTMENT_TEAM_NAME', 'INVESTMENT_SUB_TEAM_NAME'])["MARKET_VALUE"].sum().reset_index()
-
-                    grand_total_row = [Paragraph('<b>Grand Total</b>', custom_style), Paragraph('', custom_style), Paragraph(f"{round(grand_total, 2)}", custom_style)]
+                    
+                    # Calculate grand total
+                    grand_total = filtered_df['MARKET_VALUE'].sum() if filtered_df is not None and 'MARKET_VALUE' in filtered_df.columns else 0
+                    
+                    # Add grand total row
+                    grand_total_row = [Paragraph('<b>Grand Total</b>', custom_style)]
+                    # Add empty cells for middle columns
+                    for _ in range(len(header_row) - 2):
+                        grand_total_row.append(Paragraph('', custom_style))
+                    # Add the total value in the last column
+                    grand_total_row.append(Paragraph(f"{round(grand_total, 2)}", custom_style))
                     table_data.append(grand_total_row)
-                    row_index = len(table_data)
-
-                    if aggregated_values_team is not None:
-                        for index, row in aggregated_values_team.iterrows():
-                            investment_team_name = row['INVESTMENT_TEAM_NAME']
-                            investment_sub_team_name = row['INVESTMENT_SUB_TEAM_NAME']
-                            aggregated_value = row['MARKET_VALUE']
-
-                            formatted_row = [Paragraph(f"<b>{investment_team_name}</b>", custom_style), Paragraph(f"{investment_sub_team_name}", custom_style), Paragraph(f"{aggregated_value:.2f}", custom_style)]
-
-                            table_data.append(formatted_row)
-                            row_index += 1
-
+                    
+                    # Add aggregated team data if available
+                    if filtered_df is not None and 'INVESTMENT_TEAM_NAME' in filtered_df.columns and 'INVESTMENT_SUB_TEAM_NAME' in filtered_df.columns:
+                        try:
+                            aggregated_values_team = filtered_df.groupby(['INVESTMENT_TEAM_NAME', 'INVESTMENT_SUB_TEAM_NAME'])["MARKET_VALUE"].sum().reset_index()
+                            
+                            for _, team_row in aggregated_values_team.iterrows():
+                                investment_team_name = team_row['INVESTMENT_TEAM_NAME']
+                                investment_sub_team_name = team_row['INVESTMENT_SUB_TEAM_NAME']
+                                aggregated_value = team_row['MARKET_VALUE']
+                                
+                                formatted_row = [
+                                    Paragraph(f"<b>{investment_team_name}</b>", custom_style),
+                                    Paragraph(f"{investment_sub_team_name}", custom_style)
+                                ]
+                                # Add empty cells for middle columns if needed
+                                for _ in range(len(header_row) - 3):
+                                    formatted_row.append(Paragraph('', custom_style))
+                                # Add the aggregated value in the last column
+                                formatted_row.append(Paragraph(f"{aggregated_value:.2f}", custom_style))
+                                table_data.append(formatted_row)
+                        except Exception as e:
+                            print(f"Error aggregating team data: {e}")
+                    
+                    # Create table style
+                    header_styles = [
+                        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),  # Center align header
+                        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#34495E")),  # Header background
+                        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),  # Header text color
+                        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),  # Header font
+                        ('BOTTOMPADDING', (0, 0), (-1, 0), 8),  # Header padding
+                        ('GRID', (0, 0), (-1, -1), 0.25, colors.HexColor("#E0E0E0")),  # Grid lines
+                    ]
+                    
+                    # Add alternating row colors
+                    for row_idx in range(1, len(table_data), 2):
+                        header_styles.append(('BACKGROUND', (0, row_idx), (-1, row_idx), colors.HexColor("#F8F9FA")))
+                    
+                    # Create the table style
                     table_style = TableStyle(header_styles)
+                    
+                    # Create the table
                     table = Table(table_data)
                     table.setStyle(table_style)
+                    
                     elements.append(table)
                     elements.append(PageBreak())
 
