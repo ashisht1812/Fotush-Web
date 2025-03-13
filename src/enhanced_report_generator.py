@@ -176,7 +176,7 @@ class ReportEngine:
             color=colors.HexColor("#E0E0E0"),
             spaceBefore=5,
             spaceAfter=15,
-            lineCap=1
+            lineCap='round'
         ))
         
         # Create custom styles for TOC entries
@@ -207,7 +207,7 @@ class ReportEngine:
         
         for topic in self.reports['topics']:
             title = topic['title']
-            page_num = self.bookmarks.get(title, 1)  # Get page number from bookmarks
+            page_num = self.bookmarks.get(title, 1)
             
             # Format main topic entry with dots
             dots = "." * (50 - len(f"{section_num}. {title}") - len(str(page_num)))
@@ -278,7 +278,8 @@ class ReportEngine:
         # Add bookmarks for the current page
         for bookmark_key, bookmark_page in self.bookmarks.items():
             if bookmark_page == page_num:
-                canvas.bookmarkPage(bookmark_key)
+                bookmark_name = bookmark_key.replace(" ", "_").lower()
+                canvas.bookmarkPage(bookmark_name)
         
         canvas.restoreState()
 
@@ -633,13 +634,27 @@ class ReportEngine:
             'Group5': '#9E9E9E'
         }
 
+        self.current_page = 1  # Track current page
+        self.bookmarks = {}  # Reset bookmarks
+
+        # Track section numbers
+        section_num = 1
+        subsection_num = 1
+        
         for section in self.reports['topics']:
             title = section['title']
             content = section['content']
-            self.register_bookmark(title)
-            elements.append(Paragraph(title, self.styles['Heading1']))
+            
+            # Create section title with bookmark
+            section_title = Paragraph(title, self.styles['Heading1'])
+            bookmark_name = title.replace(" ", "_").lower()
+            section_title.bookmarkName = bookmark_name
+            self.bookmarks[title] = self.current_page  # Store current page number
+            
+            elements.append(section_title)
             elements.append(Paragraph(f"{content}", self.styles['TOCHeading2']))
             elements.append(PageBreak())
+            self.current_page += 1  # Increment page counter
 
             for section in self.reports['topics']:
                 elements.append(Paragraph(section['title'], self.styles['Heading1']))
