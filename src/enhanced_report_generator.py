@@ -162,7 +162,7 @@ class ReportEngine:
         ))
 
     def build_table_of_contents(self):
-        """Build a modern, professional table of contents with hierarchical numbering."""
+        """Build a professional table of contents with topics and subtopics."""
         elements = []
         
         # Add TOC title with modern styling
@@ -179,7 +179,7 @@ class ReportEngine:
             lineCap=1
         ))
         
-        # Create a custom style for main entries
+        # Create custom styles for TOC entries
         main_entry_style = ParagraphStyle(
             'MainTOCEntry',
             parent=self.styles['BodyText'],
@@ -190,7 +190,6 @@ class ReportEngine:
             textColor=colors.HexColor("#2C3E50")
         )
         
-        # Create a custom style for sub entries
         sub_entry_style = ParagraphStyle(
             'SubTOCEntry',
             parent=self.styles['BodyText'],
@@ -204,27 +203,30 @@ class ReportEngine:
         
         # Track section numbers
         section_num = 1
+        subsection_num = 1
         
-        # Process bookmarks and create TOC entries
-        sorted_bookmarks = sorted(self.bookmarks.items(), key=lambda x: x[1])  # Sort by page number
-        current_main_section = None
-        
-        for title, page_num in sorted_bookmarks:
-            # Check if this is a main section or subsection
-            if '.' not in title:
-                # Main section
-                dots = "." * (50 - len(f"{section_num}. {title}") - len(str(page_num)))
-                toc_text = f"{section_num}. {title}{dots}{page_num}"
-                elements.append(Paragraph(toc_text, main_entry_style))
-                current_main_section = section_num
-                section_num += 1
-            else:
-                # Subsection
-                # Extract subsection number
-                sub_num = title.split('.')[-1]
-                dots = "." * (45 - len(f"{current_main_section}.{sub_num} {title}") - len(str(page_num)))
-                toc_text = f"{current_main_section}.{sub_num} {title}{dots}{page_num}"
-                elements.append(Paragraph(toc_text, sub_entry_style))
+        for topic in self.reports['topics']:
+            title = topic['title']
+            page_num = self.bookmarks.get(title, 1)  # Get page number from bookmarks
+            
+            # Format main topic entry with dots
+            dots = "." * (50 - len(f"{section_num}. {title}") - len(str(page_num)))
+            toc_text = f"{section_num}. {title}{dots}{page_num}"
+            elements.append(Paragraph(toc_text, main_entry_style))
+            
+            # Handle sections (subtopics)
+            if 'sections' in topic:
+                for section in topic['sections']:
+                    section_title = section.get('section_name', '')
+                    if section_title:
+                        # Format subtopic entry with dots
+                        dots = "." * (45 - len(f"{section_num}.{subsection_num} {section_title}") - len(str(page_num)))
+                        sub_toc_text = f"{section_num}.{subsection_num} {section_title}{dots}{page_num}"
+                        elements.append(Paragraph(sub_toc_text, sub_entry_style))
+                        subsection_num += 1
+            
+            section_num += 1
+            subsection_num = 1  # Reset subsection numbering for next main topic
         
         elements.append(Spacer(1, 20))
         elements.append(PageBreak())
@@ -332,7 +334,7 @@ class ReportEngine:
         # Create column header row
         header_row = []
         for col_info in report_column_info:
-            header_text = col_info.get("display_name", col_info.get("name", col_info.get("header", "")))
+            header_text = col_info.get("display_name", col_info.get("name", ""))
             header_cell = Paragraph(f"<b>{header_text}</b>", custom_style)
             header_row.append(header_cell)
         
